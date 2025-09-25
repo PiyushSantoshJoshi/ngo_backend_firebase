@@ -31,6 +31,60 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
+ngoapp.post("/registerManyNgos", async (req, res) => {
+  try {
+    const ngos = req.body.ngos; // Expecting an array of NGO objects
+
+    if (!Array.isArray(ngos) || ngos.length === 0) {
+      return res.status(400).json({ message: "NGO list is required" });
+    }
+
+    const batch = db.batch();
+    const errors = [];
+
+    for (let ngo of ngos) {
+      const { name, city, fullAddress, category, registrationId, contact, email, password } = ngo;
+
+      if (!name || !city || !fullAddress || !category || !registrationId || !contact || !email || !password) {
+        errors.push({ email, error: "Missing required fields" });
+        continue;
+      }
+
+      const ngoRef = db.collection("ngos").doc(email);
+      const existingNgo = await ngoRef.get();
+
+      if (existingNgo.exists) {
+        errors.push({ email, error: "Already exists" });
+        continue;
+      }
+
+      batch.set(ngoRef, {
+        name,
+        city,
+        fullAddress,
+        category,
+        registrationId,
+        contact,
+        email,
+        password, // ⚠ Should be hashed in real apps
+        status: "pending",
+        createdAt: new Date(),
+        approvedBy: null
+      });
+    }
+
+    // Commit all in one go
+    await batch.commit();
+
+    res.status(201).json({
+      message: "NGO registrations processed",
+      errors: errors.length ? errors : null
+    });
+  } catch (error) {
+    console.error("Error registering NGOs:", error);
+    res.status(500).json({ message: "Error registering NGOs", error: error.message });
+  }
+});
 // ======================= USER REGISTRATION =======================
 ngoapp.post("/registerUser", async (req, res) => {
   try {
